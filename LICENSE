@@ -1,0 +1,53 @@
+MIT License
+
+Copyright (c) 2026 Seongcheol Jeon
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+==============================================================================
+THIRD-PARTY NOTICES
+==============================================================================
+
+This plugin statically links to or includes headers of the following
+third-party libraries. Their licenses apply to their respective files.
+
+- CGAL (The Computational Geometry Algorithms Library)
+  License: GPL v3 (for the packages used by this plugin, including
+           Alpha_wrap_3 and Surface_mesh).
+  Implication: distributions that include CGAL-linked binaries must comply
+  with GPL v3. This plugin is provided for educational and portfolio use;
+  commercial use requires a separate CGAL commercial license from
+  GeometryFactory (https://www.geometryfactory.com/).
+  Source: https://www.cgal.org/
+
+- meshoptimizer (zeux/meshoptimizer)
+  License: MIT
+  Source: https://github.com/zeux/meshoptimizer
+
+- Boost
+  License: Boost Software License 1.0
+  Source: https://www.boost.org/
+
+- GMP (GNU Multiple Precision Arithmetic Library)
+  License: LGPL v3 / GPL v2 (dual)
+  Source: https://gmplib.org/
+
+- MPFR
+  License: LGPL v3
+  Source: https://www.mpfr.org/

@@ -1,0 +1,32 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1.0",
+	"FriendlyName": "UEAssetOptimizer",
+	"Description": "CGAL-powered editor plugin for automatic LOD generation (meshoptimizer) and Alpha Wrap mesh cleanup (CGAL). Educational/portfolio use — CGAL components are GPL v3; commercial use requires a CGAL commercial license.",
+	"Category": "Editor Tools",
+	"CreatedBy": "Seongcheol Jeon",
+	"CreatedByURL": "",
+	"DocsURL": "",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"CanContainContent": false,
+	"IsBetaVersion": true,
+	"IsExperimentalVersion": false,
+	"Installed": false,
+	"EngineVersion": "5.7.0",
+	"Modules": [
+		{
+			"Name": "UEAssetOptimizerEditor",
+			"Type": "Editor",
+			"LoadingPhase": "Default",
+			"PlatformAllowList": [ "Win64" ]
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "EditorScriptingUtilities",
+			"Enabled": true
+		}
+	]
+}

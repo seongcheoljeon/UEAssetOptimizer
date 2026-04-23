@@ -1,0 +1,53 @@
+# Unreal Engine generated
+Binaries/
+DerivedDataCache/
+Intermediate/
+Saved/
+*.sln
+*.suo
+*.sdf
+*.opensdf
+*.vcxproj*
+*.vsp
+*.psess
+*.pidb
+*.xcodeproj/
+*.xcworkspace/
+
+# UE editor temp
+*.VC.db
+*.VC.opendb
+.vs/
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ThirdParty: prebuilt binaries & downloaded source archives are NOT checked in.
+# The prebuild script re-fetches and rebuilds them.
+Source/ThirdParty/CGAL/include/
+Source/ThirdParty/CGALBoost/include/
+Source/ThirdParty/meshoptimizer/src/
+Source/ThirdParty/meshoptimizer/include/
+Source/ThirdParty/GMP/include/
+Source/ThirdParty/GMP/lib/
+Source/ThirdParty/GMP/bin/
+Source/ThirdParty/MPFR/include/
+Source/ThirdParty/MPFR/lib/
+Source/ThirdParty/MPFR/bin/
+
+# Build artifacts from prebuild script
+Scripts/_build/
+Scripts/_downloads/
+*.zip
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.7z
+
+# Local env
+.env
+.env.local
