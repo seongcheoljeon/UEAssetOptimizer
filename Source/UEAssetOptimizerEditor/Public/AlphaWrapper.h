@@ -35,7 +35,14 @@ struct UEASSETOPTIMIZEREDITOR_API FAlphaWrapParams
 		meta = (ClampMin = "1.0", EditCondition = "Purpose == EAlphaWrapPurpose::Custom"))
 	float RelativeOffset = 600.0f;
 
-	/** If true, run isotropic remeshing post-process on the wrap result. */
+	/**
+	 * If true, run CGAL isotropic remeshing on the wrap output.
+	 * Smoothes alpha_wrap_3's sampling micro-facets but **increases triangle
+	 * count** (target edge = alpha/2). Off by default because most use cases
+	 * (collision, baking cage) prefer the lower-triangle raw wrap and the
+	 * patchy shading under smooth lighting is cosmetic. Enable only if the
+	 * wrap will be viewed/shaded in-scene.
+	 */
 	UPROPERTY(EditAnywhere, Category = "AlphaWrap")
 	bool bEnableRemeshing = false;
 };

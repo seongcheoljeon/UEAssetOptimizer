@@ -33,6 +33,7 @@ THIRD_PARTY_INCLUDES_START
 #include <CGAL/alpha_wrap_3.h>
 #include <CGAL/Polygon_mesh_processing/IO/polygon_mesh_io.h>
 #include <CGAL/Polygon_mesh_processing/bbox.h>
+#include <CGAL/Polygon_mesh_processing/remesh.h>
 
 THIRD_PARTY_INCLUDES_END
 

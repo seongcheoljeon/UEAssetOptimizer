@@ -85,11 +85,15 @@ function Install-CGALBoost {
     }
     Write-Host "[CGALBoost] installing Boost v$BoostVersion (headers only)"
     $versionUnderscored = $BoostVersion.Replace('.', '_')
-    $archive = Join-Path $Downloads "boost_$versionUnderscored.tar.gz"
-    Get-Archive "https://archives.boost.io/release/$BoostVersion/source/boost_$versionUnderscored.tar.gz" $archive
+    # Use .zip on Windows: .tar.gz contains symlinks that Windows tar.exe cannot
+    # create, producing "empty or unreadable filename" errors and partial extractions.
+    $archive = Join-Path $Downloads "boost_$versionUnderscored.zip"
+    Get-Archive "https://archives.boost.io/release/$BoostVersion/source/boost_$versionUnderscored.zip" $archive
     $work = Join-Path $BuildRoot 'CGALBoost'
     Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue
-    Expand-TarArchive $archive $work
+    New-Item -ItemType Directory -Path $work -Force | Out-Null
+    Write-Host "  [extract] $archive (this can take a few minutes)"
+    Expand-Archive -Path $archive -DestinationPath $work -Force
     $root = Join-Path $work "boost_$versionUnderscored"
     $dest = Join-Path $ThirdParty 'CGALBoost/include'
     New-Item -ItemType Directory -Path $dest -Force | Out-Null
@@ -143,36 +147,42 @@ function Install-GmpMpfr {
         throw @"
 vcpkg not found on PATH.
 
-Install vcpkg first:
-    git clone https://github.com/microsoft/vcpkg C:\vcpkg
-    C:\vcpkg\bootstrap-vcpkg.bat
-    setx PATH "`$env:PATH;C:\vcpkg"
+Install vcpkg (pick any directory, e.g. C:\dev\vcpkg):
+    git clone https://github.com/microsoft/vcpkg <INSTALL_DIR>
+    <INSTALL_DIR>\bootstrap-vcpkg.bat
+    [Environment]::SetEnvironmentVariable('PATH',
+        ([Environment]::GetEnvironmentVariable('PATH','User') + ';<INSTALL_DIR>'),
+        'User')
 
-Then re-run this script.
+Open a new PowerShell window so the PATH update is visible, then re-run this script.
 "@
     }
 
     & vcpkg install gmp:x64-windows mpfr:x64-windows | Out-Host
     if ($LASTEXITCODE -ne 0) { throw "vcpkg install failed." }
 
-    # Resolve vcpkg install prefix.
-    $vcpkgRoot   = (& vcpkg integrate install | Select-String 'vcpkg root is ([^ ]+)').Matches.Groups[1].Value.Trim()
-    if (-not $vcpkgRoot) {
-        $vcpkgRoot = Split-Path -Parent $vcpkg.Source
-    }
+    # Resolve vcpkg install prefix. The reliable source is the directory
+    # containing vcpkg.exe (e.g. C:\dev\vcpkg). Older versions embedded the
+    # root in `vcpkg integrate install` output, but the format has drifted.
+    $vcpkgRoot    = Split-Path -Parent $vcpkg.Source
     $vcpkgInstall = Join-Path $vcpkgRoot 'installed/x64-windows'
+    if (-not (Test-Path $vcpkgInstall)) {
+        throw "vcpkg install prefix not found: $vcpkgInstall"
+    }
+    Write-Host "  [vcpkg] install prefix = $vcpkgInstall"
 
-    # GMP
+    # GMP -- keep vcpkg original filenames; the .lib's import records reference
+    # the DLL by its exact name "gmp-10.dll", so renaming breaks load-time resolution.
     Copy-ItemEnsure "$vcpkgInstall/include/gmp.h"       (Join-Path $ThirdParty 'GMP/include/gmp.h')
     Copy-ItemEnsure "$vcpkgInstall/include/gmpxx.h"     (Join-Path $ThirdParty 'GMP/include/gmpxx.h') -Optional
-    Copy-ItemEnsure "$vcpkgInstall/lib/gmp.lib"         (Join-Path $ThirdParty 'GMP/lib/Win64/libgmp-10.lib')
-    Copy-ItemEnsure "$vcpkgInstall/bin/gmp-10.dll"      (Join-Path $ThirdParty 'GMP/bin/Win64/libgmp-10.dll') -Optional
+    Copy-ItemEnsure "$vcpkgInstall/lib/gmp.lib"         (Join-Path $ThirdParty 'GMP/lib/Win64/gmp.lib')
+    Copy-ItemEnsure "$vcpkgInstall/bin/gmp-10.dll"      (Join-Path $ThirdParty 'GMP/bin/Win64/gmp-10.dll') -Optional
 
-    # MPFR
+    # MPFR -- same rule: do not rename mpfr-6.dll.
     Copy-ItemEnsure "$vcpkgInstall/include/mpfr.h"      (Join-Path $ThirdParty 'MPFR/include/mpfr.h')
     Copy-ItemEnsure "$vcpkgInstall/include/mpf2mpfr.h"  (Join-Path $ThirdParty 'MPFR/include/mpf2mpfr.h') -Optional
-    Copy-ItemEnsure "$vcpkgInstall/lib/mpfr.lib"        (Join-Path $ThirdParty 'MPFR/lib/Win64/libmpfr-4.lib')
-    Copy-ItemEnsure "$vcpkgInstall/bin/mpfr-6.dll"      (Join-Path $ThirdParty 'MPFR/bin/Win64/libmpfr-4.dll') -Optional
+    Copy-ItemEnsure "$vcpkgInstall/lib/mpfr.lib"        (Join-Path $ThirdParty 'MPFR/lib/Win64/mpfr.lib')
+    Copy-ItemEnsure "$vcpkgInstall/bin/mpfr-6.dll"      (Join-Path $ThirdParty 'MPFR/bin/Win64/mpfr-6.dll') -Optional
 }
 
 function Copy-ItemEnsure {

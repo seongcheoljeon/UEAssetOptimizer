@@ -9,6 +9,11 @@ public class UEAssetOptimizerEditor : ModuleRules
 		bUseUnity = false;
 		CppStandard = CppStandardVersion.Cpp20;
 
+		// CGAL throws std::exception on invalid input / precondition failures.
+		// UE disables exceptions by default; we must opt in for this module so
+		// that CGAL unwinding works and try/catch blocks aren't UB.
+		bEnableExceptions = true;
+
 		PublicIncludePaths.AddRange(new string[] { });
 		PrivateIncludePaths.AddRange(new string[] { });
 

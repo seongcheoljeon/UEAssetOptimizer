@@ -42,10 +42,14 @@ On success you should see these directories populated:
 ```
 Source/ThirdParty/
 ├── CGAL/include/CGAL/
-├── Boost/include/boost/
+├── CGALBoost/include/boost/
 ├── meshoptimizer/include/, src/
-├── GMP/include/, lib/Win64/, bin/Win64/
-└── MPFR/include/, lib/Win64/, bin/Win64/
+├── GMP/include/gmp.h
+│   ├── lib/Win64/gmp.lib
+│   └── bin/Win64/gmp-10.dll     <-- do NOT rename; .lib imports reference this exact name
+└── MPFR/include/mpfr.h
+    ├── lib/Win64/mpfr.lib
+    └── bin/Win64/mpfr-6.dll     <-- same rule
 ```
 
 ## 3. Generate UE project files
@@ -92,6 +96,7 @@ Clicking either currently logs a stub message (`LogUEAssetOptimizer`). Full beha
 |---------|-------------|
 | `fatal error C1083: Cannot open include file: 'CGAL/...'` | Prebuild script failed or hasn't run. Re-run `pwsh Scripts\prebuild_thirdparty.ps1 -Force`. |
 | Macro redefinition `check`, `TEXT`, `PI` | CGAL headers included outside `CGALIncludes.h`. Always use that wrapper. |
-| `LNK2019` on `__gmpz_*` or `mpfr_*` | GMP/MPFR libs missing in `Source/ThirdParty/{GMP,MPFR}/lib/Win64/`. Verify vcpkg install finished and paths in `GMP.Build.cs` / `MPFR.Build.cs` match. |
+| `LNK2019` on `__gmpz_*` or `mpfr_*` | GMP/MPFR libs missing in `Source/ThirdParty/{GMP,MPFR}/lib/Win64/`. Verify `gmp.lib` / `mpfr.lib` exist there. |
+| Plugin fails to load at startup after touching CGAL code that uses exact predicates (e.g. `alpha_wrap_3`, Delaunay) | `gmp-10.dll` / `mpfr-6.dll` renamed or missing. Never rename vcpkg DLLs — the `.lib` import records hard-code those exact filenames. |
 | Huge compile times | Set `bUseUnity = false` in `UEAssetOptimizerEditor.Build.cs` (already done) and consider enabling `bUseSharedPCHs = true`. |
 | Plugin disabled after editor restart | Check `Output Log` for `LogUEAssetOptimizer: startup` — if absent the module failed to load. |

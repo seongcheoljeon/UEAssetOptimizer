@@ -15,8 +15,8 @@ UEAssetOptimizer (plugin)
     ├── meshoptimizer      MIT, header + source compiled in-module
     ├── CGAL               GPL, header-only
     ├── CGALBoost          BSL, header-only (renamed from "Boost" to dodge UE module-name conflict)
-    ├── GMP                LGPL, prebuilt static lib (vcpkg)
-    └── MPFR               LGPL, prebuilt static lib (vcpkg)
+    ├── GMP                LGPL, vcpkg import lib `gmp.lib` + DLL `gmp-10.dll`
+    └── MPFR               LGPL, vcpkg import lib `mpfr.lib` + DLL `mpfr-6.dll`
 ```
 
 ## Data flow
@@ -69,9 +69,15 @@ wrapped → FMeshDescription → new UStaticMesh asset (<Source>_Wrap)
    around every CGAL include to avoid cryptic template errors.
 4. **ThirdParty binaries not vendored**. vcpkg fetches GMP/MPFR at prebuild
    time. Keeps the repo small and gives us reproducibility.
-5. **No runtime DLL dependency if we can help it**. Prefer static builds of
-   GMP/MPFR; fall back to DLL + `RuntimeDependencies.Add` if vcpkg only
-   provides dynamic.
+5. **Never rename vcpkg DLLs**. The `.lib` import records embed the exact
+   referenced DLL filename (`gmp-10.dll`, `mpfr-6.dll`). Renaming the DLL file
+   leaves the `.lib` pointing at a name the OS loader can't find, and the
+   plugin fails to load the first time a GMP/MPFR symbol is actually exercised
+   (not at startup). Keep vcpkg's original filenames end-to-end.
+6. **Runtime DLL staging via `RuntimeDependencies.Add`**. Copies
+   `gmp-10.dll` / `mpfr-6.dll` next to the plugin's own DLL so the OS loader
+   resolves them through the default DLL search path. No `DelayLoad` — it
+   would require manual `LoadLibrary` before the first call.
 
 ## Testing strategy
 
