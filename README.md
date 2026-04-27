@@ -94,7 +94,7 @@ What it does (~15–40 min first time, mostly vcpkg building GMP/MPFR):
 
 | Library | Source | License | Where it lands |
 |---------|--------|---------|----------------|
-| meshoptimizer | GitHub release `.tar.gz` | MIT | `Source/ThirdParty/meshoptimizer/{include,src}` |
+| meshoptimizer | vcpkg `meshoptimizer:x64-windows-static-md` | MIT | `Source/ThirdParty/MeshOpt/{include,lib/Win64}` |
 | Boost (headers only) | archives.boost.io `.zip` | BSL-1.0 | `Source/ThirdParty/CGALBoost/include/boost` |
 | CGAL (headers only) | GitHub release `.tar.xz` | GPL v3 | `Source/ThirdParty/CGAL/include/CGAL` |
 | GMP | vcpkg `gmp:x64-windows` | LGPL | `Source/ThirdParty/GMP/{include,lib/Win64,bin/Win64}` |
@@ -109,7 +109,8 @@ Flags:
 ```powershell
 Test-Path Source\ThirdParty\CGAL\include\CGAL\alpha_wrap_3.h        # must be True
 Test-Path Source\ThirdParty\CGALBoost\include\boost\version.hpp     # must be True
-Test-Path Source\ThirdParty\meshoptimizer\include\meshoptimizer.h   # must be True
+Test-Path Source\ThirdParty\MeshOpt\include\meshoptimizer.h          # must be True
+Test-Path Source\ThirdParty\MeshOpt\lib\Win64\meshoptimizer.lib      # must be True
 Test-Path Source\ThirdParty\GMP\include\gmp.h                       # must be True
 Test-Path Source\ThirdParty\MPFR\include\mpfr.h                     # must be True
 Test-Path Source\ThirdParty\GMP\lib\Win64\gmp.lib                   # must be True

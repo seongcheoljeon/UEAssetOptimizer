@@ -51,7 +51,7 @@ public class UEAssetOptimizerEditor : ModuleRules
 			"CGALBoost",
 			"GMP",
 			"MPFR",
-			"meshoptimizer",
+			"MeshOpt",
 		});
 
 		DynamicallyLoadedModuleNames.AddRange(new string[] { });

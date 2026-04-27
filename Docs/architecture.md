@@ -12,7 +12,7 @@ UEAssetOptimizer (plugin)
 │   └── UAlphaWrapper                   CGAL::alpha_wrap_3 wrapper
 │
 └── ThirdParty (External ModuleType)
-    ├── meshoptimizer      MIT, header + source compiled in-module
+    ├── MeshOpt            MIT, vcpkg static lib `meshoptimizer.lib` (External module)
     ├── CGAL               GPL, header-only
     ├── CGALBoost          BSL, header-only (renamed from "Boost" to dodge UE module-name conflict)
     ├── GMP                LGPL, vcpkg import lib `gmp.lib` + DLL `gmp-10.dll`

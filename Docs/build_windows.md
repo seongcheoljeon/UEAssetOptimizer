@@ -43,7 +43,8 @@ On success you should see these directories populated:
 Source/ThirdParty/
 ├── CGAL/include/CGAL/
 ├── CGALBoost/include/boost/
-├── meshoptimizer/include/, src/
+├── MeshOpt/include/meshoptimizer.h
+│   └── lib/Win64/meshoptimizer.lib
 ├── GMP/include/gmp.h
 │   ├── lib/Win64/gmp.lib
 │   └── bin/Win64/gmp-10.dll     <-- do NOT rename; .lib imports reference this exact name

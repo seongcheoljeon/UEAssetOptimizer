@@ -51,27 +51,37 @@ function Expand-TarArchive {
 }
 
 # ---------------------------------------------------------------------------
-# meshoptimizer (MIT, source-compiled)
+# meshoptimizer (MIT) — prebuilt static lib via vcpkg
+#
+# Triplet x64-windows-static-md = static .lib + dynamic CRT (/MD), matching
+# UE's CRT linkage. This produces a single meshoptimizer.lib that the UE
+# editor module links statically, with no DLL boundary or API macro hacks.
 # ---------------------------------------------------------------------------
 function Install-MeshOptimizer {
-    $target = Join-Path $ThirdParty 'meshoptimizer'
-    $incDir = Join-Path $target 'include'
-    $srcDir = Join-Path $target 'src'
-    if (-not $Force -and (Test-Path (Join-Path $incDir 'meshoptimizer.h'))) {
-        Write-Host "[meshoptimizer] already present, skipping."
+    $headerTarget = Join-Path $ThirdParty 'MeshOpt/include/meshoptimizer.h'
+    $libTarget    = Join-Path $ThirdParty 'MeshOpt/lib/Win64/meshoptimizer.lib'
+    if (-not $Force -and (Test-Path $headerTarget) -and (Test-Path $libTarget)) {
+        Write-Host "[MeshOpt] already present, skipping."
         return
     }
-    Write-Host "[meshoptimizer] installing v$MeshOptVersion"
-    $archive = Join-Path $Downloads "meshoptimizer-$MeshOptVersion.tar.gz"
-    Get-Archive "https://github.com/zeux/meshoptimizer/archive/refs/tags/v$MeshOptVersion.tar.gz" $archive
-    $work = Join-Path $BuildRoot 'meshoptimizer'
-    Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue
-    Expand-TarArchive $archive $work
+    Write-Host "[MeshOpt] installing meshoptimizer:x64-windows-static-md via vcpkg"
 
-    $root = Get-ChildItem $work -Directory | Select-Object -First 1
-    New-Item -ItemType Directory -Path $incDir, $srcDir -Force | Out-Null
-    Copy-Item -Force (Join-Path $root 'src/*.h')   $incDir
-    Copy-Item -Force (Join-Path $root 'src/*.cpp') $srcDir
+    $vcpkg = Get-Command vcpkg -ErrorAction SilentlyContinue
+    if (-not $vcpkg) {
+        throw "vcpkg not found on PATH. See Install-GmpMpfr block for setup instructions."
+    }
+
+    & vcpkg install meshoptimizer:x64-windows-static-md | Out-Host
+    if ($LASTEXITCODE -ne 0) { throw "vcpkg meshoptimizer install failed." }
+
+    $vcpkgRoot    = Split-Path -Parent $vcpkg.Source
+    $vcpkgInstall = Join-Path $vcpkgRoot 'installed/x64-windows-static-md'
+    if (-not (Test-Path $vcpkgInstall)) {
+        throw "vcpkg static-md install prefix not found: $vcpkgInstall"
+    }
+
+    Copy-ItemEnsure "$vcpkgInstall/include/meshoptimizer.h" $headerTarget
+    Copy-ItemEnsure "$vcpkgInstall/lib/meshoptimizer.lib"   $libTarget
 }
 
 # ---------------------------------------------------------------------------
