@@ -14,6 +14,7 @@
 #include "Math/UnrealMathUtility.h"
 
 #include "MeshOptIncludes.h"
+#include "MeshAssetOps.h"
 
 namespace UEAOpt
 {
@@ -336,22 +337,9 @@ namespace UEAOpt
 
 		for (int32 i = 0; i < LODs.Num(); ++i)
 		{
-			const int32 LODIndex = i + 1;
-			FStaticMeshSourceModel& SM = Source->GetSourceModel(LODIndex);
-
-			SM.BuildSettings.bRecomputeNormals         = false;
-			SM.BuildSettings.bRecomputeTangents        = false;
-			SM.BuildSettings.bUseMikkTSpace            = false;
-			SM.BuildSettings.bGenerateLightmapUVs      = false;
-			SM.BuildSettings.bBuildReversedIndexBuffer = false;
-
 			// sqrt(triangle_ratio) approximates pixel-coverage ratio for screen size.
 			const float ScreenFrac = FMath::Sqrt(FMath::Clamp(Ratios[i], 0.01f, 1.f));
-			SM.ScreenSize.Default = ScreenFrac;
-
-			FMeshDescription* DstMD = Source->CreateMeshDescription(LODIndex, MoveTemp(LODs[i]));
-			check(DstMD);
-			Source->CommitMeshDescription(LODIndex);
+			CommitLOD(Source, i + 1, MoveTemp(LODs[i]), ScreenFrac);
 		}
 
 		Source->PostEditChange();
@@ -380,20 +368,11 @@ namespace UEAOpt
 			return nullptr;
 		}
 
-		const FString SourcePackageName = Source->GetOutermost()->GetName();
-		const FString ParentPath        = FPackageName::GetLongPackagePath(SourcePackageName);
-		const FString NewAssetName      = Source->GetName() + TEXT("_LODs");
-		const FString NewPackageName    = ParentPath / NewAssetName;
-
-		UPackage* NewPackage = CreatePackage(*NewPackageName);
-		NewPackage->FullyLoad();
-
-		UStaticMesh* NewMesh = FindObject<UStaticMesh>(NewPackage, *NewAssetName);
-		const bool bIsNew = (NewMesh == nullptr);
-		if (bIsNew)
+		bool bIsNew = false;
+		UStaticMesh* NewMesh = CreateOrOverwriteSiblingAsset(Source, TEXT("_LODs"), bIsNew);
+		if (!NewMesh)
 		{
-			NewMesh = NewObject<UStaticMesh>(NewPackage, *NewAssetName,
-				RF_Public | RF_Standalone | RF_Transactional);
+			return nullptr;
 		}
 
 		// Inherit source's material slots (preserve slot order so polygon group
@@ -411,46 +390,21 @@ namespace UEAOpt
 		const int32 TotalLODs = 1 + LODs.Num();
 		NewMesh->SetNumSourceModels(TotalLODs);
 
-		auto ConfigureSourceModel = [&](int32 Index, float ScreenFrac)
-		{
-			FStaticMeshSourceModel& SM = NewMesh->GetSourceModel(Index);
-			SM.BuildSettings.bRecomputeNormals         = false;
-			SM.BuildSettings.bRecomputeTangents        = false;
-			SM.BuildSettings.bUseMikkTSpace            = false;
-			SM.BuildSettings.bGenerateLightmapUVs      = false;
-			SM.BuildSettings.bBuildReversedIndexBuffer = false;
-			SM.ScreenSize.Default = ScreenFrac;
-		};
-
 		// LOD0: deep-copy of source LOD0 MeshDescription.
 		if (const FMeshDescription* SrcMD = Source->GetMeshDescription(0))
 		{
 			FMeshDescription CopyMD = *SrcMD;
-			ConfigureSourceModel(0, 1.f);
-			FMeshDescription* DstMD = NewMesh->CreateMeshDescription(0, MoveTemp(CopyMD));
-			check(DstMD);
-			NewMesh->CommitMeshDescription(0);
+			CommitLOD(NewMesh, 0, MoveTemp(CopyMD), 1.f);
 		}
 
 		// LOD1..N: generated.
 		for (int32 i = 0; i < LODs.Num(); ++i)
 		{
-			const int32 LODIndex = i + 1;
 			const float ScreenFrac = FMath::Sqrt(FMath::Clamp(Ratios[i], 0.01f, 1.f));
-			ConfigureSourceModel(LODIndex, ScreenFrac);
-			FMeshDescription* DstMD = NewMesh->CreateMeshDescription(LODIndex, MoveTemp(LODs[i]));
-			check(DstMD);
-			NewMesh->CommitMeshDescription(LODIndex);
+			CommitLOD(NewMesh, i + 1, MoveTemp(LODs[i]), ScreenFrac);
 		}
 
-		NewMesh->PostEditChange();
-		NewMesh->Build(/*bSilent*/ false);
-		NewMesh->MarkPackageDirty();
-
-		if (bIsNew)
-		{
-			FAssetRegistryModule::AssetCreated(NewMesh);
-		}
+		FinalizeAsset(NewMesh, bIsNew);
 
 		UE_LOG(LogUEAssetOptimizer, Log,
 			TEXT("CreateLODsAsset: %s -> %s (%s, %d LODs)"),
