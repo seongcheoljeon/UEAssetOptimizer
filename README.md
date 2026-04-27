@@ -6,14 +6,33 @@ Two features:
 1. **Auto LOD Generation** — meshoptimizer-based mesh simplification with UV/feature-edge preservation. Generates multi-level LODs on any `UStaticMesh` with one right-click.
 2. **Alpha Wrap** — CGAL `Alpha_wrap_3`-based automatic watertight shrink-wrap. Perfect for generating physics collision meshes or texture-bake cages from dirty scan data.
 
-> Status: **work in progress** (Sprint 1 scaffolding). See [`Docs/architecture.md`](Docs/architecture.md) for the roadmap.
+> Status: **functional v0.1** (Sprints 1–4 + refactor + alpha-wrap polish). LOD generator and Alpha Wrap both verified end-to-end. Project is paused at a learning-ready state — see "For learners" below.
 
 ## Why this plugin
 
 Real-time rendering demands optimized assets. This plugin bridges the gap between raw content (scans, sculpts, CAD) and engine-ready geometry, directly inside the Unreal Editor.
 
 - LOD reduces GPU frame time and draw-call cost at distance.
-- Alpha Wrap produces watertight meshes from otherwise broken inputs — essential for physics colliders and UV-bake cages.
+- Alpha Wrap produces watertight meshes from otherwise broken inputs — essential for physics colliders and texture-bake cages. Note: Alpha Wrap output is a **support mesh** (collision / cage / repair), not a textured visual mesh — see [CGAL's official use cases](https://doc.cgal.org/latest/Alpha_wrap_3/index.html).
+
+## For learners
+
+이 프로젝트는 **포트폴리오/학습 목적** 으로 만들어졌고, 코드 흐름과 결정 배경을 따라가며 다음 주제를 익힐 수 있도록 정리되어 있습니다:
+
+- UE 5.7 플러그인 / 모듈 시스템 / `Build.cs` 의 동작
+- UE ↔ 외부 C++ 라이브러리 통합 (CGAL, meshoptimizer, vcpkg)
+- DLL 경계 / API 매크로 / GPL 라이브러리 정적 링크
+- 메쉬 데이터 모델 변환 (UE `FMeshDescription` ↔ CGAL `Surface_mesh` ↔ flat arrays / triangle soup)
+- Slate 모달 다이얼로그 + `FScopedSlowTask` + `FSlateNotificationManager` 패턴
+- 게임 엔진 그래픽스 워크플로우 (LOD ratio, mesh simplification, watertight wrap)
+- 좌표계 / winding / smooth normal 계산 같은 3D 알고리즘 기본기
+
+**추천 시작점**:
+1. [`Docs/walkthrough.md`](Docs/walkthrough.md) — 코드를 읽는 추천 순서 (~3시간 분량, 22개 단계)
+2. [`Docs/decision_log.md`](Docs/decision_log.md) — 16개 주요 결정의 시간순 배경 ("왜 이렇게 됐는가")
+3. [`Docs/architecture.md`](Docs/architecture.md) — 모듈 구조 + 데이터 플로우 다이어그램
+
+Each `.cpp` / `.h` 도 헤더 주석에 자체 설명이 있으므로 위 가이드 + 코드만으로 자가 학습 가능합니다.
 
 ## Requirements
 
