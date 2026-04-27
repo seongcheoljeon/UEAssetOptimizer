@@ -11,18 +11,33 @@
 #include "Containers/Map.h"
 #include "HAL/PlatformTime.h"
 
+#include <array>
+#include <vector>
+
 #include "CGALIncludes.h"  // MUST go through this wrapper (Boost/UE macro isolation)
+#include "MeshAssetOps.h"
 
 namespace UEAOpt
 {
 	/**
-	 * UE UStaticMesh (LOD0) -> CGAL Surface_mesh.
+	 * UE UStaticMesh (LOD0) -> CGAL triangle soup (vector of points + vector of
+	 * face index triples). Mirrors the input shape used by CGAL's official
+	 * `triangle_soup_wrap.cpp` example.
 	 *
-	 * Degenerate triangles (repeated vertex indices) and triangles CGAL refuses
-	 * due to non-manifold local topology are counted and skipped — alpha_wrap_3
-	 * is robust to incomplete input, which is the main reason we use it.
+	 * Triangle soup is preferred over CGAL::Surface_mesh as the input form
+	 * because alpha_wrap_3's primary use case is "defective 3D data" (CGAL's own
+	 * wording): self-intersections, non-manifold edges, inconsistent winding,
+	 * disconnected islands. Surface_mesh::add_face refuses non-manifold faces
+	 * (silently dropping them and biasing the wrap), but the soup overload
+	 * accepts everything and lets the algorithm handle robustness internally.
+	 *
+	 * Only degenerate triangles (two equal vertex indices in one face) are
+	 * dropped here — those are not 2D simplices and CGAL has no use for them.
 	 */
-	static bool BuildCGALMeshFromStaticMesh(const UStaticMesh* Source, CGALSurfaceMesh& OutMesh)
+	static bool BuildTriangleSoupFromStaticMesh(
+		const UStaticMesh* Source,
+		std::vector<CGALPoint3>& OutPoints,
+		std::vector<std::array<std::size_t, 3>>& OutFaces)
 	{
 #if WITH_EDITOR
 		if (!Source)
@@ -34,7 +49,7 @@ namespace UEAOpt
 		if (!MD)
 		{
 			UE_LOG(LogUEAssetOptimizer, Warning,
-				TEXT("BuildCGALMeshFromStaticMesh: no MeshDescription on %s"),
+				TEXT("BuildTriangleSoup: no MeshDescription on %s"),
 				*Source->GetName());
 			return false;
 		}
@@ -47,58 +62,57 @@ namespace UEAOpt
 		if (NumVerts == 0 || NumTris == 0)
 		{
 			UE_LOG(LogUEAssetOptimizer, Warning,
-				TEXT("BuildCGALMeshFromStaticMesh: empty mesh on %s (V=%d T=%d)"),
+				TEXT("BuildTriangleSoup: empty mesh on %s (V=%d T=%d)"),
 				*Source->GetName(), NumVerts, NumTris);
 			return false;
 		}
 
-		OutMesh.clear();
-		OutMesh.reserve(NumVerts, 0, NumTris);
+		OutPoints.clear();
+		OutFaces.clear();
+		OutPoints.reserve(NumVerts);
+		OutFaces.reserve(NumTris);
 
-		TMap<int32, CGALSurfaceMesh::Vertex_index> VertexMap;
+		// FVertexID is an opaque int32 wrapper; use its raw value as a key into
+		// a flat array indexed by FMeshDescription's vertex array index.
+		TMap<int32, std::size_t> VertexMap;
 		VertexMap.Reserve(NumVerts);
 
 		for (const FVertexID VertexID : MD->Vertices().GetElementIDs())
 		{
 			const FVector3f P = Positions[VertexID];
-			const auto CGALIdx = OutMesh.add_vertex(CGALPoint3(
+			VertexMap.Add(VertexID.GetValue(), OutPoints.size());
+			OutPoints.emplace_back(
 				static_cast<double>(P.X),
 				static_cast<double>(P.Y),
-				static_cast<double>(P.Z)));
-			VertexMap.Add(VertexID.GetValue(), CGALIdx);
+				static_cast<double>(P.Z));
 		}
 
 		int32 SkippedDegenerate = 0;
-		int32 SkippedNonManifold = 0;
 		for (const FTriangleID TriangleID : MD->Triangles().GetElementIDs())
 		{
 			TArrayView<const FVertexID> TriVerts = MD->GetTriangleVertices(TriangleID);
 
-			const auto v0 = VertexMap[TriVerts[0].GetValue()];
-			const auto v1 = VertexMap[TriVerts[1].GetValue()];
-			const auto v2 = VertexMap[TriVerts[2].GetValue()];
+			const std::size_t i0 = VertexMap[TriVerts[0].GetValue()];
+			const std::size_t i1 = VertexMap[TriVerts[1].GetValue()];
+			const std::size_t i2 = VertexMap[TriVerts[2].GetValue()];
 
-			if (v0 == v1 || v1 == v2 || v0 == v2)
+			if (i0 == i1 || i1 == i2 || i0 == i2)
 			{
 				++SkippedDegenerate;
 				continue;
 			}
 
-			const auto Face = OutMesh.add_face(v0, v1, v2);
-			if (Face == CGALSurfaceMesh::null_face())
-			{
-				++SkippedNonManifold;
-			}
+			OutFaces.push_back({ i0, i1, i2 });
 		}
 
 		UE_LOG(LogUEAssetOptimizer, Log,
-			TEXT("BuildCGALMeshFromStaticMesh(%s): V=%d F=%d (skipped: degenerate=%d non-manifold=%d)"),
+			TEXT("BuildTriangleSoup(%s): V=%d F=%d (skipped degenerate=%d)"),
 			*Source->GetName(),
-			(int32)OutMesh.number_of_vertices(),
-			(int32)OutMesh.number_of_faces(),
-			SkippedDegenerate, SkippedNonManifold);
+			(int32)OutPoints.size(),
+			(int32)OutFaces.size(),
+			SkippedDegenerate);
 
-		return OutMesh.number_of_faces() > 0;
+		return !OutFaces.empty();
 #else
 		return false;
 #endif
@@ -186,11 +200,19 @@ namespace UEAOpt
 			const FVector3f P1 = Positions[VtxMap[static_cast<uint32>(V1)]];
 			const FVector3f P2 = Positions[VtxMap[static_cast<uint32>(V2)]];
 
-			// After winding reversal (V0, V2, V1) for UE's CW convention, the
-			// face normal in UE space is cross(P2-P0, P1-P0). Not normalized
-			// so magnitude naturally weights by face area in the sum.
-			const FVector3f E1 = P2 - P0;
-			const FVector3f E2 = P1 - P0;
+			// Outward face normal: CGAL Surface_mesh halfedges are ordered CCW
+			// when viewed from outside, so (P1-P0) x (P2-P0) points outward by
+			// the right-hand rule. The pass-2 winding swap (V0, V2, V1) only
+			// affects UE's front/back-face determination -- vertex normals are
+			// independent of winding and must point outward relative to the
+			// surface for lighting (NdotL) to read positive. Earlier code had
+			// E1/E2 swapped, producing inward normals and a black mesh under
+			// lit shading.
+			//
+			// Cross product is unnormalized so |FN| = 2 * face area, giving
+			// area-weighted blending when summed across incident faces.
+			const FVector3f E1 = P1 - P0;
+			const FVector3f E2 = P2 - P0;
 			const FVector3f FN = FVector3f::CrossProduct(E1, E2);
 
 			AccumNormal[static_cast<uint32>(V0)] += FN;
@@ -275,30 +297,16 @@ namespace UEAOpt
 			return nullptr;
 		}
 
-		// Target package path: sibling of the source, named "<Source>_Wrap".
-		const FString SourcePackageName = Source->GetOutermost()->GetName();
-		const FString ParentPath        = FPackageName::GetLongPackagePath(SourcePackageName);
-		const FString NewAssetName      = Source->GetName() + TEXT("_Wrap");
-		const FString NewPackageName    = ParentPath / NewAssetName;
-
-		// If an asset with that name already exists, overwrite its contents.
-		UPackage* NewPackage = CreatePackage(*NewPackageName);
-		NewPackage->FullyLoad();
-
-		UStaticMesh* NewMesh = FindObject<UStaticMesh>(NewPackage, *NewAssetName);
-		const bool bIsNew = (NewMesh == nullptr);
-		if (bIsNew)
+		bool bIsNew = false;
+		UStaticMesh* NewMesh = CreateOrOverwriteSiblingAsset(Source, TEXT("_Wrap"), bIsNew);
+		if (!NewMesh)
 		{
-			NewMesh = NewObject<UStaticMesh>(NewPackage, *NewAssetName,
-				RF_Public | RF_Standalone | RF_Transactional);
+			return nullptr;
 		}
 
 		// Inherit the source mesh's first material so the wrap renders with the
-		// same look when placed in a scene without user assignment. A nullptr
-		// slot falls back to UE's dark DefaultMaterial, which makes the wrap
-		// appear nearly black — not what users expect for a "copy" of the
-		// source. Only the first slot is used because the wrap has a single
-		// polygon group.
+		// same look when placed in a scene without user assignment. Only the
+		// first slot is used because the wrap has a single polygon group.
 		NewMesh->GetStaticMaterials().Reset();
 		const TArray<FStaticMaterial>& SrcMaterials = Source->GetStaticMaterials();
 		if (SrcMaterials.Num() > 0)
@@ -310,35 +318,14 @@ namespace UEAOpt
 			NewMesh->GetStaticMaterials().Add(FStaticMaterial(nullptr, TEXT("Default"), TEXT("Default")));
 		}
 
-		// Source model (LOD0) with sensible defaults.
+		// Ensure LOD0 source model exists, then commit MeshDescription.
 		if (NewMesh->GetNumSourceModels() == 0)
 		{
 			NewMesh->AddSourceModel();
 		}
-		FStaticMeshSourceModel& SourceModel = NewMesh->GetSourceModel(0);
-		// We supply explicit area-weighted smooth normals from CGAL space, so
-		// tell UE to keep them as-is. Tangents are still skipped because the
-		// mesh has no UVs and MikkTSpace would warn.
-		SourceModel.BuildSettings.bRecomputeNormals      = false;
-		SourceModel.BuildSettings.bRecomputeTangents     = false;
-		SourceModel.BuildSettings.bUseMikkTSpace         = false;
-		SourceModel.BuildSettings.bGenerateLightmapUVs   = false;
-		SourceModel.BuildSettings.bBuildReversedIndexBuffer = false;
+		CommitLOD(NewMesh, 0, MoveTemp(MD), 1.f);
 
-		// Commit MeshDescription into the source model.
-		FMeshDescription* DstMD = NewMesh->CreateMeshDescription(0, MoveTemp(MD));
-		check(DstMD);
-		NewMesh->CommitMeshDescription(0);
-
-		// Build render data.
-		NewMesh->PostEditChange();
-		NewMesh->Build(/*bSilent*/ false);
-		NewMesh->MarkPackageDirty();
-
-		if (bIsNew)
-		{
-			FAssetRegistryModule::AssetCreated(NewMesh);
-		}
+		FinalizeAsset(NewMesh, bIsNew);
 
 		UE_LOG(LogUEAssetOptimizer, Log,
 			TEXT("CreateWrappedAsset: %s -> %s (%s)"),
@@ -361,16 +348,17 @@ UStaticMesh* UAlphaWrapper::CreateAlphaWrap(UStaticMesh* Source, const FAlphaWra
 	}
 
 	// 1. UE -> CGAL
-	UEAOpt::CGALSurfaceMesh InMesh;
+	std::vector<UEAOpt::CGALPoint3> InPoints;
+	std::vector<std::array<std::size_t, 3>> InFaces;
 	bool bConverted = false;
 	try
 	{
-		bConverted = UEAOpt::BuildCGALMeshFromStaticMesh(Source, InMesh);
+		bConverted = UEAOpt::BuildTriangleSoupFromStaticMesh(Source, InPoints, InFaces);
 	}
 	catch (const std::exception& e)
 	{
 		UE_LOG(LogUEAssetOptimizer, Error,
-			TEXT("CreateAlphaWrap: CGAL mesh build threw: %s"),
+			TEXT("CreateAlphaWrap: triangle soup build threw: %s"),
 			UTF8_TO_TCHAR(e.what()));
 		return nullptr;
 	}
@@ -380,10 +368,17 @@ UStaticMesh* UAlphaWrapper::CreateAlphaWrap(UStaticMesh* Source, const FAlphaWra
 	}
 
 	// 2. Resolve absolute alpha / offset from bbox diagonal.
+	// Match CGAL's triangle_soup_wrap.cpp pattern: accumulate Bbox_3 from points
+	// directly. We don't build a Surface_mesh as input, so we can't use
+	// Polygon_mesh_processing::bbox().
 	double DiagonalLength = 0.0;
 	try
 	{
-		const auto Bbox = CGAL::Polygon_mesh_processing::bbox(InMesh);
+		CGAL::Bbox_3 Bbox;
+		for (const auto& P : InPoints)
+		{
+			Bbox += P.bbox();
+		}
 		const double dx = Bbox.xmax() - Bbox.xmin();
 		const double dy = Bbox.ymax() - Bbox.ymin();
 		const double dz = Bbox.zmax() - Bbox.zmin();
@@ -414,12 +409,12 @@ UStaticMesh* UAlphaWrapper::CreateAlphaWrap(UStaticMesh* Source, const FAlphaWra
 		static_cast<int32>(Params.Purpose),
 		DiagonalLength, AbsAlpha, AbsOffset);
 
-	// 3. Run alpha_wrap_3.
+	// 3. Run alpha_wrap_3 (triangle soup overload).
 	UEAOpt::CGALSurfaceMesh WrappedMesh;
 	const double WrapStart = FPlatformTime::Seconds();
 	try
 	{
-		CGAL::alpha_wrap_3(InMesh, AbsAlpha, AbsOffset, WrappedMesh);
+		CGAL::alpha_wrap_3(InPoints, InFaces, AbsAlpha, AbsOffset, WrappedMesh);
 	}
 	catch (const std::exception& e)
 	{
@@ -432,7 +427,7 @@ UStaticMesh* UAlphaWrapper::CreateAlphaWrap(UStaticMesh* Source, const FAlphaWra
 	UE_LOG(LogUEAssetOptimizer, Log,
 		TEXT("alpha_wrap_3 done in %.2fs: in V=%d F=%d -> out V=%d F=%d"),
 		WrapElapsed,
-		(int32)InMesh.number_of_vertices(),    (int32)InMesh.number_of_faces(),
+		(int32)InPoints.size(), (int32)InFaces.size(),
 		(int32)WrappedMesh.number_of_vertices(), (int32)WrappedMesh.number_of_faces());
 
 	if (WrappedMesh.number_of_faces() == 0)
